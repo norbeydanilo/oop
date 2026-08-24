@@ -705,14 +705,15 @@ PSEUDOCÓDIGO (main):
   REPETIR
     Imprimir menú:
       1. Registrar paciente
-      2. Asignar paciente a sala (ambulatorio u hospitalizado)
-      3. Agendar cita con médico
-      4. Ver pacientes de una sala
-      5. Ver agenda de un médico
-      6. Dar de alta a paciente
-      7. Buscar paciente por código
-      8. Reporte general del hospital
-      9. Crear nueva sala
+      2. Listar pacientes registrados
+      3. Asignar paciente a sala (ambulatorio u hospitalizado)
+      4. Agendar cita con médico
+      5. Ver pacientes de una sala
+      6. Ver agenda de un médico
+      7. Dar de alta a paciente
+      8. Buscar paciente por código
+      9. Reporte general del hospital
+      10. Crear nueva sala
       0. Salir
     opción = leerEntero(sc, "Opción: ")   // ya no puede reventar con texto no numérico
 
@@ -745,7 +746,18 @@ PSEUDOCÓDIGO (main):
           Imprimir "Error al registrar: " + e.getMessage()
         FIN INTENTAR
 
-      CASO 2:  // Asignar a sala — funciona igual para AMBOS tipos de paciente
+      CASO 2:  // Listar pacientes registrados — SIN importar si ya están en una sala o citados
+        SI pacientesRegistrados está vacía ENTONCES
+          Imprimir "No hay pacientes registrados todavía."
+          RETORNAR al menú
+        FIN SI
+        Imprimir "=== PACIENTES REGISTRADOS (" + pacientesRegistrados.size() + ") ==="
+        PARA CADA paciente EN pacientesRegistrados HACER
+          // POLIMORFISMO DINÁMICO: obtenerInfo() distinto según sea Ambulatorio u Hospitalizado
+          Imprimir paciente.obtenerInfo()
+        FIN PARA
+
+      CASO 3:  // Asignar a sala — funciona igual para AMBOS tipos de paciente
         Listar salas disponibles con su ocupación (hospital.getSalas())
         Leer nombre de sala
         sala = hospital.buscarSala(nombreSala)
@@ -769,7 +781,7 @@ PSEUDOCÓDIGO (main):
           Imprimir "Error: " + e.getMessage()
         FIN INTENTAR
 
-      CASO 3:  // Agendar cita — YA NO se manda paciente=null
+      CASO 4:  // Agendar cita — YA NO se manda paciente=null
         hospital.listarMedicos()   // consulta el personal real, nada quemado
         Leer id del médico
 
@@ -797,12 +809,12 @@ PSEUDOCÓDIGO (main):
           Imprimir "Error: " + e.getMessage()
         FIN INTENTAR
 
-      CASO 4:
+      CASO 5:
         Leer nombre de sala
         sala = hospital.buscarSala(nombreSala)
         SI sala es null ENTONCES Imprimir "Sala no encontrada." SI NO sala.listarPacientes()
 
-      CASO 5:
+      CASO 6:
         hospital.listarMedicos()
         Leer id del médico
         INTENTAR
@@ -814,7 +826,7 @@ PSEUDOCÓDIGO (main):
           Imprimir "Error: " + e.getMessage()
         FIN INTENTAR
 
-      CASO 6:
+      CASO 7:
         Leer nombre de sala y codigo del paciente
         sala = hospital.buscarSala(nombreSala)
         SI sala es null ENTONCES Imprimir "Sala no encontrada." RETORNAR
@@ -824,7 +836,7 @@ PSEUDOCÓDIGO (main):
           Imprimir "Error: " + e.getMessage()
         FIN INTENTAR
 
-      CASO 7:
+      CASO 8:
         Leer codigo
         INTENTAR
           Paciente p = hospital.buscarPaciente(codigo)
@@ -833,10 +845,10 @@ PSEUDOCÓDIGO (main):
           Imprimir "Error: " + e.getMessage()
         FIN INTENTAR
 
-      CASO 8:
+      CASO 9:
         hospital.generarReporteGeneral()
 
-      CASO 9:  // Crear sala desde el main, en tiempo de ejecución
+      CASO 10:  // Crear sala desde el main, en tiempo de ejecución
         Leer nombre de la nueva sala
         capacidad = leerEntero(sc, "Capacidad: ")
         INTENTAR
