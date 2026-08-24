@@ -37,8 +37,8 @@ abstract class Personal {
 class Medico {
   - citas: ArrayList<Cita>
   + Medico(nombre, id, especialidad)
-  + agendarCita(fecha: String): void
-  + agendarCita(fecha: String, motivo: String): void
+  + agendarCita(fecha: String, paciente: Paciente): void
+  + agendarCita(fecha: String, motivo: String, paciente: Paciente): void
   + generarReporte(): String
   + getCitas(): ArrayList<Cita>
 }
@@ -100,9 +100,11 @@ class Hospital {
   - salas: ArrayList<Sala>
   - personal: ArrayList<Personal>
   + Hospital(nombre)
-  + agregarSala(s: Sala): void
+  + agregarSala(nombre: String, capacidad: int): void
   + agregarPersonal(p: Personal): void
   + buscarPaciente(codigo: String): Paciente
+  + buscarMedico(id: String): Medico
+  + listarMedicos(): void
   + generarReporteGeneral(): void
   + getSalas(): ArrayList<Sala>
   + getPersonal(): ArrayList<Personal>
@@ -149,14 +151,18 @@ SistemaHospital/
     │   ├── PacienteHospitalizado.java  ← final
     │   ├── Cita.java
     │   ├── Sala.java
-    │   └── Hospital.java
+    │   ├── Hospital.java
+    │   └── Validador.java          ← utilidad de validación de datos
     ├── com/hospital/excepciones/
     │   ├── CamaNoDisponibleException.java
     │   ├── PacienteNoEncontradoException.java
+    │   ├── PersonalNoEncontradoException.java
     │   └── CitaInvalidaException.java
     └── com/hospital/app/
         └── App.java
 ```
+
+> **Nota:** ¿Un paciente asignado a una sala debe ser ambulatorio u hospitalizado? **Ambos.** `Sala` trabaja con `ArrayList<Paciente>` — el tipo abstracto — precisamente para poder guardar cualquier subtipo sin distinguirlos. Un paciente ambulatorio ocupa la sala mientras espera su consulta; un hospitalizado la ocupa por sus días de estadía. Esto es lo que permite el **polimorfismo**: la sala no necesita saber de qué tipo es cada paciente para gestionarlo.
 
 ---
 
@@ -166,7 +172,7 @@ SistemaHospital/
 
 ### Paquete `com.hospital.excepciones`
 
-Crea las tres excepciones personalizadas antes de cualquier otra clase — las necesitarás en todo el proyecto.
+Crea las cuatro excepciones personalizadas antes de cualquier otra clase — las necesitarás en todo el proyecto.
 
 **`CamaNoDisponibleException`**
 ```
@@ -184,6 +190,14 @@ PSEUDOCÓDIGO:
   Llama super("Paciente con código " + codigo + " no encontrado.")
 ```
 
+**`PersonalNoEncontradoException`**
+```
+PSEUDOCÓDIGO:
+  Extiende Exception
+  Constructor recibe id String
+  Llama super("No existe personal registrado con id " + id + ".")
+```
+
 **`CitaInvalidaException`**
 ```
 PSEUDOCÓDIGO:
@@ -195,6 +209,23 @@ PSEUDOCÓDIGO:
 ---
 
 ### Paquete `com.hospital.modelo`
+
+#### Clase de utilidad `Validador`
+
+Clase con métodos **estáticos** para validar datos comunes a varias clases (nombre, por ejemplo). Evita repetir la misma validación en `Personal` y en `Paciente`.
+
+```
+PSEUDOCÓDIGO:
+  Método estático validarNombre(nombre):
+    SI nombre es nulo o vacío ENTONCES
+      lanzar IllegalArgumentException("El nombre no puede estar vacío.")
+    FIN SI
+    SI nombre contiene algún dígito (0-9) ENTONCES
+      lanzar IllegalArgumentException("El nombre no puede contener números: " + nombre)
+    FIN SI
+```
+
+> Se usa como `Validador.validarNombre(nombre);` al inicio de los constructores de `Personal` y `Paciente`, antes de asignar el atributo.
 
 ---
 
@@ -214,6 +245,7 @@ Representa a cualquier miembro del personal del hospital. Nadie es "personal gen
 ```
 PSEUDOCÓDIGO:
   Recibe nombre, id, especialidad
+  Llama Validador.validarNombre(nombre)   // lanza IllegalArgumentException si es inválido
   Asigna cada uno a sus atributos
 ```
 
@@ -240,18 +272,23 @@ PSEUDOCÓDIGO:
 
 **Métodos:**
 
-`agendarCita(fecha)` *(primera versión — SOBRECARGA)*
+> ⚠ **Importante:** la `Cita` debe quedar asociada a un paciente **real**, no a `null`. Por eso ambas versiones de `agendarCita` reciben el objeto `Paciente` ya encontrado — es responsabilidad de quien llama (la clase `App`) pedir el código, buscarlo con `hospital.buscarPaciente(codigo)` y pasar el objeto resultante.
+
+`agendarCita(fecha, paciente)` *(primera versión — SOBRECARGA)*
 ```
 PSEUDOCÓDIGO:
   SI fecha es nula o vacía ENTONCES
     lanzar CitaInvalidaException("La fecha no puede estar vacía.")
   FIN SI
-  Crear nueva Cita con fecha, motivo="Consulta general", paciente=null, medico=this
+  SI paciente es null ENTONCES
+    lanzar CitaInvalidaException("Debe indicarse un paciente válido para la cita.")
+  FIN SI
+  Crear nueva Cita con fecha, motivo="Consulta general", paciente, medico=this
   Agregar cita a la lista citas
-  Imprimir "Cita agendada para " + fecha
+  Imprimir "Cita agendada para " + fecha + " con paciente " + paciente.getNombre()
 ```
 
-`agendarCita(fecha, motivo)` *(segunda versión — SOBRECARGA)*
+`agendarCita(fecha, motivo, paciente)` *(segunda versión — SOBRECARGA)*
 ```
 PSEUDOCÓDIGO:
   SI fecha es nula o vacía ENTONCES
@@ -260,12 +297,15 @@ PSEUDOCÓDIGO:
   SI motivo es nulo o vacío ENTONCES
     lanzar CitaInvalidaException("El motivo no puede estar vacío.")
   FIN SI
-  Crear nueva Cita con fecha, motivo, paciente=null, medico=this
+  SI paciente es null ENTONCES
+    lanzar CitaInvalidaException("Debe indicarse un paciente válido para la cita.")
+  FIN SI
+  Crear nueva Cita con fecha, motivo, paciente, medico=this
   Agregar cita a la lista citas
-  Imprimir "Cita agendada para " + fecha + " por: " + motivo
+  Imprimir "Cita agendada para " + fecha + " por: " + motivo + " con paciente " + paciente.getNombre()
 ```
 
-> Estas dos versiones constituyen el **polimorfismo estático (sobrecarga)**.
+> Estas dos versiones constituyen el **polimorfismo estático (sobrecarga)** — mismo nombre, diferente número de parámetros.
 
 `generarReporte()` *(SOBREESCRITURA de Personal — POLIMORFISMO DINÁMICO)*
 ```
@@ -326,6 +366,7 @@ Representa a cualquier paciente del hospital. Nadie es "paciente genérico".
 ```
 PSEUDOCÓDIGO:
   Recibe nombre, codigo, edad
+  Llama Validador.validarNombre(nombre)
   SI edad < 0 O edad > 120 ENTONCES
     lanzar IllegalArgumentException("Edad inválida: " + edad)
   FIN SI
@@ -387,6 +428,9 @@ PSEUDOCÓDIGO:
   Llama super(nombre, codigo, edad)
   SI numeroCama <= 0 ENTONCES
     lanzar IllegalArgumentException("Número de cama inválido.")
+  FIN SI
+  SI diasHospitalizado < 0 ENTONCES
+    lanzar IllegalArgumentException("Los días hospitalizado no pueden ser negativos.")
   FIN SI
   Asigna numeroCama y diasHospitalizado
 ```
@@ -533,7 +577,7 @@ Contiene salas y personal. Si el hospital desaparece, sus salas también — est
 PSEUDOCÓDIGO:
   Recibe nombre
   Inicializa salas y personal como ArrayList vacíos
-  Crea internamente las salas del hospital (mínimo 3):
+  Crea internamente las salas iniciales del hospital (mínimo 3):
     new Sala("Urgencias", 10)
     new Sala("Pediatria", 8)
     new Sala("Cirugia", 6)
@@ -541,6 +585,16 @@ PSEUDOCÓDIGO:
 ```
 
 **Métodos:**
+
+`agregarSala(nombre, capacidad)` — permite crear salas nuevas desde `App` después de construido el hospital
+```
+PSEUDOCÓDIGO:
+  Crear nueva Sala(nombre, capacidad)   // el Hospital sigue creando el objeto internamente:
+                                         // esto conserva la COMPOSICIÓN aunque el disparo
+                                         // venga desde afuera (App solo pide "créala", no la crea él mismo)
+  Agregar la sala a la lista salas
+  Imprimir "Sala '" + nombre + "' creada con capacidad " + capacidad
+```
 
 `agregarPersonal(personal)`
 ```
@@ -573,6 +627,28 @@ PSEUDOCÓDIGO:
   lanzar PacienteNoEncontradoException(codigo)
 ```
 
+`buscarMedico(id)` — retorna `Medico`, lanza `PersonalNoEncontradoException`
+```
+PSEUDOCÓDIGO:
+  PARA CADA p EN personal HACER
+    SI p es instancia de Medico Y p.getId() igual a id ENTONCES
+      RETORNAR (Medico) p
+    FIN SI
+  FIN PARA
+  lanzar PersonalNoEncontradoException(id)
+```
+
+`listarMedicos()` — consulta el personal real en lugar de datos quemados
+```
+PSEUDOCÓDIGO:
+  Imprimir "Médicos disponibles:"
+  PARA CADA p EN personal HACER
+    SI p es instancia de Medico ENTONCES
+      Imprimir "  " + p.getId() + " - " + p.getNombre() + " (" + p.getEspecialidad() + ")"
+    FIN SI
+  FIN PARA
+```
+
 `generarReporteGeneral()`
 ```
 PSEUDOCÓDIGO:
@@ -596,8 +672,28 @@ PSEUDOCÓDIGO:
 
 #### Clase `App` — menú principal
 
+> **Sobre las excepciones del menú:** cualquier lectura numérica (`sc.nextInt()`) puede fallar si el usuario escribe texto en lugar de un número — Java lanza `InputMismatchException`. Para no dejar que esto reviente el programa, **crea un método auxiliar `leerEntero(sc, mensaje)`** que insiste hasta recibir un número válido, capturando esa excepción internamente. Úsalo para leer la opción del menú, el tipo de paciente, la edad, el número de cama y los días — cualquier campo numérico del sistema.
+
 ```
-PSEUDOCÓDIGO:
+PSEUDOCÓDIGO (método auxiliar):
+  FUNCIÓN leerEntero(sc, mensaje):
+    REPETIR
+      INTENTAR
+        Imprimir mensaje
+        valor = sc.nextInt()
+        sc.nextLine()  // limpiar el resto del buffer
+        RETORNAR valor
+      CAPTURAR InputMismatchException
+        Imprimir "Error: debes ingresar un número entero."
+        sc.nextLine()  // limpiar la entrada inválida para no quedar en bucle infinito
+      FIN INTENTAR
+    HASTA obtener un valor válido
+```
+
+```
+PSEUDOCÓDIGO (main):
+  Crear lista temporal pacientesRegistrados (ArrayList<Paciente>)
+
   Crear hospital "Hospital Regional San Juan"
   Crear médicos:
     Medico m1 = new Medico("Dra. Laura Gomez", "M001", "Cardiologia")
@@ -609,72 +705,122 @@ PSEUDOCÓDIGO:
   REPETIR
     Imprimir menú:
       1. Registrar paciente
-      2. Asignar paciente a sala
+      2. Asignar paciente a sala (ambulatorio u hospitalizado)
       3. Agendar cita con médico
       4. Ver pacientes de una sala
       5. Ver agenda de un médico
       6. Dar de alta a paciente
       7. Buscar paciente por código
       8. Reporte general del hospital
+      9. Crear nueva sala
       0. Salir
-    Leer opción
+    opción = leerEntero(sc, "Opción: ")   // ya no puede reventar con texto no numérico
 
     SEGÚN opción HACER
-      CASO 1:
-        Preguntar tipo (1=Ambulatorio, 2=Hospitalizado)
-        Leer nombre, codigo, edad
-        SI tipo == 1 ENTONCES
-          Leer proximaCita
-          Crear PacienteAmbulatorio
-        SI NO
-          Leer numeroCama, diasHospitalizado
-          Crear PacienteHospitalizado
+      CASO 1:  // Registrar paciente
+        tipo = leerEntero(sc, "Tipo (1=Ambulatorio, 2=Hospitalizado): ")
+        SI tipo != 1 Y tipo != 2 ENTONCES
+          Imprimir "Tipo inválido. Debe ser 1 o 2."
+          RETORNAR al menú   // no se crea nada con un valor como 3
         FIN SI
-        // Guardar paciente en una lista temporal para asignarlo luego
 
-      CASO 2:
-        Listar salas disponibles con su ocupación
+        Leer nombre (String, texto libre)
+        Leer codigo (String)
+        edad = leerEntero(sc, "Edad: ")
+
+        INTENTAR
+          SI tipo == 1 ENTONCES
+            Leer proximaCita
+            paciente = new PacienteAmbulatorio(nombre, codigo, edad, proximaCita)
+          SI NO
+            cama = leerEntero(sc, "Número de cama: ")
+            dias = leerEntero(sc, "Días hospitalizado: ")
+            paciente = new PacienteHospitalizado(nombre, codigo, edad, cama, dias)
+          FIN SI
+          Agregar paciente a pacientesRegistrados
+          Imprimir "Paciente registrado correctamente."
+        CAPTURAR IllegalArgumentException e
+          // Salta aquí si el nombre tiene números, la edad es inválida,
+          // el número de cama es <= 0, o los días son negativos
+          Imprimir "Error al registrar: " + e.getMessage()
+        FIN INTENTAR
+
+      CASO 2:  // Asignar a sala — funciona igual para AMBOS tipos de paciente
+        Listar salas disponibles con su ocupación (hospital.getSalas())
         Leer nombre de sala
-        Buscar sala en hospital
+        sala = hospital.buscarSala(nombreSala)
+        SI sala es null ENTONCES
+          Imprimir "Sala no encontrada."
+          RETORNAR al menú
+        FIN SI
+
         Leer codigo del paciente a asignar
-        Buscar paciente en lista temporal
+        // Buscar en la lista temporal — puede ser Ambulatorio u Hospitalizado,
+        // Sala los acepta a ambos porque trabaja con el tipo Paciente (POLIMORFISMO)
+        paciente = buscar en pacientesRegistrados por codigo
+        SI paciente es null ENTONCES
+          Imprimir "Paciente no encontrado en la lista de registrados."
+          RETORNAR al menú
+        FIN SI
+
         INTENTAR
           sala.agregarPaciente(paciente)
-        CAPTURAR CamaNoDisponibleException
+        CAPTURAR CamaNoDisponibleException e
           Imprimir "Error: " + e.getMessage()
         FIN INTENTAR
 
-      CASO 3:
-        Listar médicos disponibles
+      CASO 3:  // Agendar cita — YA NO se manda paciente=null
+        hospital.listarMedicos()   // consulta el personal real, nada quemado
         Leer id del médico
-        Preguntar si agrega motivo (s/n)
-        Leer fecha
+
         INTENTAR
+          medico = hospital.buscarMedico(id)
+
+          Leer codigo del paciente para la cita
+          paciente = hospital.buscarPaciente(codigo)   // puede lanzar PacienteNoEncontradoException
+
+          Leer fecha
+          Preguntar si agrega motivo (s/n)
+
           SI con motivo ENTONCES
             Leer motivo
-            medico.agendarCita(fecha, motivo)
+            medico.agendarCita(fecha, motivo, paciente)
           SI NO
-            medico.agendarCita(fecha)
+            medico.agendarCita(fecha, paciente)
           FIN SI
-        CAPTURAR CitaInvalidaException
+
+        CAPTURAR PersonalNoEncontradoException e
+          Imprimir "Error: " + e.getMessage()
+        CAPTURAR PacienteNoEncontradoException e
+          Imprimir "Error: " + e.getMessage()
+        CAPTURAR CitaInvalidaException e
           Imprimir "Error: " + e.getMessage()
         FIN INTENTAR
 
       CASO 4:
         Leer nombre de sala
-        sala.listarPacientes()
+        sala = hospital.buscarSala(nombreSala)
+        SI sala es null ENTONCES Imprimir "Sala no encontrada." SI NO sala.listarPacientes()
 
       CASO 5:
+        hospital.listarMedicos()
         Leer id del médico
-        PARA CADA cita EN medico.getCitas() HACER
-          Imprimir cita.getInfo()
-        FIN PARA
+        INTENTAR
+          medico = hospital.buscarMedico(id)
+          PARA CADA cita EN medico.getCitas() HACER
+            Imprimir cita.getInfo()   // ya no imprime "sin asignar" — siempre hay paciente real
+          FIN PARA
+        CAPTURAR PersonalNoEncontradoException e
+          Imprimir "Error: " + e.getMessage()
+        FIN INTENTAR
 
       CASO 6:
         Leer nombre de sala y codigo del paciente
+        sala = hospital.buscarSala(nombreSala)
+        SI sala es null ENTONCES Imprimir "Sala no encontrada." RETORNAR
         INTENTAR
           sala.eliminarPaciente(codigo)
-        CAPTURAR PacienteNoEncontradoException
+        CAPTURAR PacienteNoEncontradoException e
           Imprimir "Error: " + e.getMessage()
         FIN INTENTAR
 
@@ -682,13 +828,28 @@ PSEUDOCÓDIGO:
         Leer codigo
         INTENTAR
           Paciente p = hospital.buscarPaciente(codigo)
-          Imprimir p.obtenerInfo()
-        CAPTURAR PacienteNoEncontradoException
+          Imprimir p.obtenerInfo()   // POLIMORFISMO DINÁMICO
+        CAPTURAR PacienteNoEncontradoException e
           Imprimir "Error: " + e.getMessage()
         FIN INTENTAR
 
       CASO 8:
         hospital.generarReporteGeneral()
+
+      CASO 9:  // Crear sala desde el main, en tiempo de ejecución
+        Leer nombre de la nueva sala
+        capacidad = leerEntero(sc, "Capacidad: ")
+        INTENTAR
+          hospital.agregarSala(nombre, capacidad)
+        CAPTURAR IllegalArgumentException e
+          Imprimir "Error: " + e.getMessage()
+        FIN INTENTAR
+
+      CASO 0:
+        Imprimir "Cerrando sistema..."
+
+      DEFAULT:
+        Imprimir "Opción no válida."
 
     FIN SEGÚN
   HASTA QUE opción == 0
@@ -756,14 +917,18 @@ Cita ──(asociación)──► Paciente
 - [ ] Estructura de paquetes correcta (`modelo`, `excepciones`, `app`)
 - [ ] `Personal` y `Paciente` declaradas como `abstract`
 - [ ] `PacienteHospitalizado` declarada como `final`
-- [ ] `Medico` con sobrecarga de `agendarCita` (dos versiones)
+- [ ] `Medico` con sobrecarga de `agendarCita` — **ambas versiones reciben el `Paciente` real, nunca `null`**
 - [ ] `generarReporte()` sobreescrito en `Medico` y `Enfermero`
 - [ ] `obtenerInfo()` sobreescrito en `PacienteAmbulatorio` y `PacienteHospitalizado`
-- [ ] `Hospital` con composición hacia `Sala` (crea las salas en el constructor)
-- [ ] `Sala` con agregación hacia `Paciente` (ArrayList)
-- [ ] `Cita` como asociación entre `Medico` y `Paciente`
-- [ ] Las tres excepciones personalizadas implementadas y lanzadas correctamente
-- [ ] `App` con menú funcional que demuestre todos los escenarios
+- [ ] `Hospital` con composición hacia `Sala` (crea las salas en el constructor **y** permite crear más con `agregarSala()` desde `App`)
+- [ ] `Sala` con agregación hacia `Paciente` (ArrayList) — acepta tanto ambulatorios como hospitalizados
+- [ ] `Cita` como asociación entre `Medico` y `Paciente` — el paciente se busca por código antes de agendar
+- [ ] Validación de nombre (sin dígitos) en `Personal` y `Paciente` mediante la clase `Validador`
+- [ ] Validación de días hospitalizado (no negativos) en `PacienteHospitalizado`
+- [ ] Las cuatro excepciones personalizadas implementadas y lanzadas correctamente
+- [ ] `Hospital.listarMedicos()` consulta el personal real — nada de datos quemados en `App`
+- [ ] Lecturas numéricas del menú protegidas contra `InputMismatchException` (método `leerEntero`)
+- [ ] `App` con menú funcional que demuestre todos los escenarios, incluyendo crear sala desde el main
 - [ ] Diagrama de clases en PlantUML
 
 ---
